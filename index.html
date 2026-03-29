@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>SONIC GEOMETRY</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+  :root {
+    --bg: #030508;
+    --c1: #00ffe7;
+    --c2: #ff2d6b;
+    --c3: #ffe600;
+    --c4: #7b2fff;
+    --grid: rgba(0,255,231,0.04);
+    --dim: rgba(0,255,231,0.15);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    color: var(--c1);
+    font-family: 'Share Tech Mono', monospace;
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Vignette */
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background: radial-gradient(ellipse at center, transparent 40%, #030508 100%);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  canvas {
+    position: fixed; inset: 0;
+    width: 100%; height: 100%;
+    z-index: 2;
+  }
+
+  /* UI overlay */
+  #ui {
+    position: fixed; inset: 0;
+    z-index: 10;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 20px;
+  }
+
+  /* Header */
+  #header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+
+  #title-block {}
+  h1 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(18px, 4vw, 32px);
+    font-weight: 900;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--c1);
+    text-shadow: 0 0 20px var(--c1), 0 0 60px rgba(0,255,231,0.3);
+    line-height: 1;
+  }
+  #subtitle {
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    color: var(--dim);
+    margin-top: 4px;
+    text-transform: uppercase;
+  }
+
+  /* Stats panel */
+  #stats {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: flex-end;
+  }
+  .stat {
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--dim);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .stat-val {
+    color: var(--c1);
+    font-size: 13px;
+    min-width: 60px;
+    text-align: right;
+    text-shadow: 0 0 10px var(--c1);
+  }
+
+  /* Bottom row */
+  #bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 12px;
+  }
+
+  /* Frequency bands legend */
+  #bands {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .band {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+  }
+  .band-bar {
+    width: 4px;
+    border-radius: 2px;
+    background: var(--dim);
+    transition: height 0.05s linear;
+    min-height: 4px;
+  }
+  .band-label {
+    font-size: 8px;
+    letter-spacing: 0.1em;
+    color: var(--dim);
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+  }
+
+  /* Mode pills */
+  #modes {
+    display: flex;
+    gap: 8px;
+    pointer-events: all;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .mode-btn {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 5px 10px;
+    border: 1px solid var(--dim);
+    background: transparent;
+    color: var(--dim);
+    cursor: pointer;
+    transition: all 0.2s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mode-btn.active, .mode-btn:hover {
+    border-color: var(--c1);
+    color: var(--c1);
+    text-shadow: 0 0 8px var(--c1);
+    box-shadow: 0 0 12px rgba(0,255,231,0.2), inset 0 0 8px rgba(0,255,231,0.05);
+  }
+
+  /* Center start button */
+  #start-overlay {
+    position: fixed; inset: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    background: rgba(3,5,8,0.85);
+    backdrop-filter: blur(4px);
+    transition: opacity 0.6s;
+  }
+  #start-overlay.hidden { opacity: 0; pointer-events: none; }
+
+  #start-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(28px, 8vw, 64px);
+    font-weight: 900;
+    letter-spacing: 0.2em;
+    color: var(--c1);
+    text-shadow: 0 0 40px var(--c1), 0 0 100px rgba(0,255,231,0.4);
+    text-align: center;
+  }
+  #start-sub {
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    color: var(--dim);
+    text-transform: uppercase;
+    text-align: center;
+  }
+
+  #start-btn {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    padding: 16px 40px;
+    border: 1px solid var(--c1);
+    background: transparent;
+    color: var(--c1);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s;
+    text-shadow: 0 0 10px var(--c1);
+    box-shadow: 0 0 20px rgba(0,255,231,0.2);
+  }
+  #start-btn::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: var(--c1);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s;
+    z-index: -1;
+  }
+  #start-btn:hover::before { transform: scaleX(1); }
+  #start-btn:hover { color: var(--bg); text-shadow: none; }
+
+  /* Corner decorations */
+  .corner {
+    position: fixed;
+    width: 40px; height: 40px;
+    z-index: 15;
+    pointer-events: none;
+  }
+  .corner::before, .corner::after {
+    content: '';
+    position: absolute;
+    background: var(--c1);
+    opacity: 0.5;
+  }
+  .corner::before { width: 100%; height: 1px; top: 0; left: 0; }
+  .corner::after { width: 1px; height: 100%; top: 0; left: 0; }
+  .corner.tr { top: 16px; right: 16px; transform: rotate(90deg); }
+  .corner.bl { bottom: 16px; left: 16px; transform: rotate(270deg); }
+  .corner.br { bottom: 16px; right: 16px; transform: rotate(180deg); }
+  .corner.tl { top: 16px; left: 16px; }
+
+  /* Volume ring */
+  #vol-ring {
+    position: fixed;
+    bottom: 70px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 9;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="corner tl"></div>
+<div class="corner tr"></div>
+<div class="corner bl"></div>
+<div class="corner br"></div>
+
+<canvas id="c"></canvas>
+
+<!-- Start overlay -->
+<div id="start-overlay">
+  <div id="start-title">SONIC<br>GEOMETRY</div>
+  <div id="start-sub">Visualiseur de fréquences audio en temps réel</div>
+  <button id="start-btn">⬡ Activer le Micro</button>
+</div>
+
+<!-- Main UI -->
+<div id="ui">
+  <div id="header">
+    <div id="title-block">
+      <h1>Sonic Geometry</h1>
+      <div id="subtitle">Spectre · Formes · Fréquences</div>
+    </div>
+    <div id="stats">
+      <div class="stat">FREQ DOMINANTE <span class="stat-val" id="s-freq">— Hz</span></div>
+      <div class="stat">AMPLITUDE <span class="stat-val" id="s-amp">—</span></div>
+      <div class="stat">CENTROÏDE <span class="stat-val" id="s-cent">— Hz</span></div>
+    </div>
+  </div>
+
+  <div id="bottom">
+    <div id="bands">
+      <!-- Generated by JS -->
+    </div>
+    <div id="modes">
+      <button class="mode-btn active" data-mode="mandala">Mandala</button>
+      <button class="mode-btn" data-mode="crystal">Crystal</button>
+      <button class="mode-btn" data-mode="web">Web</button>
+      <button class="mode-btn" data-mode="orbit">Orbit</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H, cx, cy;
+
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  cx = W / 2; cy = H / 2;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ─── Audio setup ───────────────────────────────────────────────────────────
+let audioCtx, analyser, dataArray, bufferLen;
+const FFT_SIZE = 2048;
+const BANDS_DEF = [
+  { label: 'SUB', min: 20,   max: 60,   color: '#7b2fff' },
+  { label: 'BASS',min: 60,   max: 250,  color: '#ff2d6b' },
+  { label: 'LOW', min: 250,  max: 500,  color: '#ff7700' },
+  { label: 'MID', min: 500,  max: 2000, color: '#ffe600' },
+  { label: 'HMID',min: 2000, max: 4000, color: '#00ff88' },
+  { label: 'HIGH',min: 4000, max: 8000, color: '#00ffe7' },
+  { label: 'AIR', min: 8000, max: 20000,color: '#ffffff' },
+];
+
+// Build band bars
+const bandsEl = document.getElementById('bands');
+BANDS_DEF.forEach((b, i) => {
+  const div = document.createElement('div');
+  div.className = 'band';
+  div.innerHTML = `<div class="band-bar" id="bb${i}" style="background:${b.color};height:4px;max-height:60px;"></div><div class="band-label" style="color:${b.color}">${b.label}</div>`;
+  bandsEl.appendChild(div);
+});
+
+function getBandEnergy(freqData, sampleRate, minHz, maxHz) {
+  const nyq = sampleRate / 2;
+  const n = freqData.length;
+  const iMin = Math.floor(minHz / nyq * n);
+  const iMax = Math.ceil(maxHz / nyq * n);
+  let sum = 0;
+  for (let i = iMin; i <= Math.min(iMax, n - 1); i++) sum += freqData[i];
+  return sum / Math.max(1, iMax - iMin);
+}
+
+async function startAudio() {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  const src = audioCtx.createMediaStreamSource(stream);
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = FFT_SIZE;
+  analyser.smoothingTimeConstant = 0.82;
+  src.connect(analyser);
+  bufferLen = analyser.frequencyBinCount;
+  dataArray = new Uint8Array(bufferLen);
+  document.getElementById('start-overlay').classList.add('hidden');
+  requestAnimationFrame(draw);
+}
+
+document.getElementById('start-btn').addEventListener('click', startAudio);
+BANDS_DEF.forEach((_, i) => {}); // init
+
+// ─── Mode selection ────────────────────────────────────────────────────────
+let mode = 'mandala';
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    mode = btn.dataset.mode;
+  });
+});
+
+// ─── Drawing helpers ───────────────────────────────────────────────────────
+function hue(freq, sampleRate) {
+  const nyq = sampleRate / 2;
+  return (freq / nyq) * 360;
+}
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+let time = 0;
+let bandVals = new Array(BANDS_DEF.length).fill(0);
+let smoothBands = new Array(BANDS_DEF.length).fill(0);
+
+// ─── Main draw loop ────────────────────────────────────────────────────────
+function draw() {
+  requestAnimationFrame(draw);
+  time += 0.01;
+
+  if (!analyser) return;
+  analyser.getByteFrequencyData(dataArray);
+
+  const sampleRate = audioCtx.sampleRate;
+  const nyq = sampleRate / 2;
+
+  // Compute band energies
+  BANDS_DEF.forEach((b, i) => {
+    const raw = getBandEnergy(dataArray, sampleRate, b.min, b.max) / 255;
+    smoothBands[i] = lerp(smoothBands[i], raw, 0.2);
+    bandVals[i] = smoothBands[i];
+    const el = document.getElementById(`bb${i}`);
+    if (el) el.style.height = Math.max(4, smoothBands[i] * 60) + 'px';
+  });
+
+  // Dominant frequency
+  let maxVal = 0, maxIdx = 0;
+  for (let i = 1; i < bufferLen; i++) {
+    if (dataArray[i] > maxVal) { maxVal = dataArray[i]; maxIdx = i; }
+  }
+  const domFreq = (maxIdx / bufferLen) * nyq;
+
+  // Spectral centroid
+  let num = 0, den = 0;
+  for (let i = 0; i < bufferLen; i++) {
+    const f = (i / bufferLen) * nyq;
+    num += f * dataArray[i];
+    den += dataArray[i];
+  }
+  const centroid = den > 0 ? num / den : 0;
+
+  // Overall amplitude
+  let ampSum = 0;
+  for (let i = 0; i < bufferLen; i++) ampSum += dataArray[i];
+  const amp = ampSum / bufferLen / 255;
+
+  // Update stats
+  document.getElementById('s-freq').textContent = domFreq.toFixed(0) + ' Hz';
+  document.getElementById('s-amp').textContent = (amp * 100).toFixed(1) + ' %';
+  document.getElementById('s-cent').textContent = centroid.toFixed(0) + ' Hz';
+
+  // ── Canvas clear with trail
+  ctx.fillStyle = 'rgba(3,5,8,0.18)';
+  ctx.fillRect(0, 0, W, H);
+
+  // Dispatch to mode
+  if (mode === 'mandala') drawMandala(amp, domFreq, centroid, sampleRate);
+  else if (mode === 'crystal') drawCrystal(amp, domFreq, centroid, sampleRate);
+  else if (mode === 'web') drawWeb(amp, domFreq, centroid, sampleRate);
+  else if (mode === 'orbit') drawOrbit(amp, domFreq, centroid, sampleRate);
+}
+
+// ─── MODE: MANDALA ─────────────────────────────────────────────────────────
+function drawMandala(amp, domFreq, centroid, sampleRate) {
+  const nyq = sampleRate / 2;
+  const sym = Math.max(3, Math.round(3 + bandVals[3] * 9)); // MID band drives symmetry
+  const R = Math.min(cx, cy) * 0.7;
+  const sub = bandVals[0], bass = bandVals[1], mid = bandVals[3], high = bandVals[5];
+
+  ctx.save();
+  ctx.translate(cx, cy);
+
+  // Outer ring — frequency bars
+  const nBars = bufferLen / 2;
+  const step = (Math.PI * 2) / nBars;
+  ctx.beginPath();
+  for (let i = 0; i < nBars; i++) {
+    const angle = i * step - Math.PI / 2;
+    const v = dataArray[i] / 255;
+    const r0 = R * 0.5;
+    const r1 = r0 + v * R * 0.45;
+    if (i === 0) ctx.moveTo(Math.cos(angle) * r0, Math.sin(angle) * r0);
+    else ctx.lineTo(Math.cos(angle) * r1, Math.sin(angle) * r1);
+  }
+  ctx.closePath();
+  const grd = ctx.createRadialGradient(0, 0, R * 0.3, 0, 0, R);
+  grd.addColorStop(0, `hsla(${centroid / nyq * 360},100%,70%,0.6)`);
+  grd.addColorStop(1, `hsla(${domFreq / nyq * 360},100%,50%,0.1)`);
+  ctx.strokeStyle = grd;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Symmetrical petals
+  for (let s = 0; s < sym; s++) {
+    ctx.save();
+    ctx.rotate((s / sym) * Math.PI * 2 + time * 0.3 * bass);
+
+    // Petal shape driven by bass
+    const pw = 0.12 + bass * 0.25;
+    const ph = 0.3 + mid * 0.4;
+    ctx.beginPath();
+    ctx.ellipse(0, -R * (0.2 + sub * 0.3), R * pw, R * ph, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = `hsla(${(s / sym) * 360},100%,65%,${0.3 + bass * 0.5})`;
+    ctx.lineWidth = 0.8 + bass * 1.5;
+    ctx.stroke();
+
+    // Inner triangle
+    if (high > 0.05) {
+      const tr = R * (0.15 + high * 0.2);
+      ctx.beginPath();
+      for (let p = 0; p < 3; p++) {
+        const a = (p / 3) * Math.PI * 2 - Math.PI / 2;
+        const px = Math.cos(a) * tr, py = Math.sin(a) * tr - R * 0.1;
+        p === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.strokeStyle = `hsla(${180 + s * 20},100%,80%,${high * 0.8})`;
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Center pulse — sub bass
+  const pulseR = 4 + sub * 60;
+  ctx.beginPath();
+  ctx.arc(0, 0, pulseR, 0, Math.PI * 2);
+  ctx.strokeStyle = `hsla(280,100%,70%,${0.5 + sub * 0.5})`;
+  ctx.lineWidth = 1 + sub * 3;
+  ctx.stroke();
+
+  // Rotating hexagon skeleton
+  ctx.save();
+  ctx.rotate(time * 0.5 + bass * 2);
+  drawPolygon(ctx, 0, 0, R * (0.35 + mid * 0.1), 6, `hsla(180,100%,60%,${0.1 + mid * 0.3})`, 1);
+  ctx.restore();
+
+  ctx.restore();
+}
+
+// ─── MODE: CRYSTAL ─────────────────────────────────────────────────────────
+function drawCrystal(amp, domFreq, centroid, sampleRate) {
+  const nyq = sampleRate / 2;
+  const bass = bandVals[1], mid = bandVals[3], high = bandVals[5], air = bandVals[6];
+  const sub = bandVals[0];
+
+  ctx.save();
+  ctx.translate(cx, cy);
+
+  const maxR = Math.min(cx, cy) * 0.85;
+  const sides = Math.round(3 + mid * 5);
+  const layers = 6;
+
+  for (let l = layers; l >= 1; l--) {
+    const frac = l / layers;
+    const r = maxR * frac;
+    const rotation = time * (l % 2 === 0 ? 1 : -1) * 0.3 * (1 + bass);
+    const energy = dataArray[Math.floor((frac * bufferLen * 0.5))] / 255;
+    const dr = energy * maxR * 0.15;
+
+    ctx.save();
+    ctx.rotate(rotation);
+
+    // Polygon outline
+    const hueVal = (frac * 200 + centroid / nyq * 160 + time * 30) % 360;
+    ctx.beginPath();
+    for (let i = 0; i <= sides; i++) {
+      const a = (i / sides) * Math.PI * 2 - Math.PI / 2;
+      const ri = r + dr * Math.sin(i * 3.14 + time);
+      const x = Math.cos(a) * ri, y = Math.sin(a) * ri;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.strokeStyle = `hsla(${hueVal},100%,65%,${0.15 + energy * 0.6})`;
+    ctx.lineWidth = 0.5 + energy * 2;
+    ctx.stroke();
+
+    // Spokes
+    if (air > 0.02) {
+      for (let i = 0; i < sides; i++) {
+        const a = (i / sides) * Math.PI * 2 - Math.PI / 2;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+        ctx.strokeStyle = `hsla(${hueVal},100%,80%,${air * 0.3})`;
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      }
+    }
+
+    ctx.restore();
+  }
+
+  // Center glitch burst on sub bass
+  if (sub > 0.15) {
+    const beams = 12;
+    for (let i = 0; i < beams; i++) {
+      const a = (i / beams) * Math.PI * 2 + time;
+      const len = maxR * sub * (0.5 + Math.random() * 0.5);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len);
+      ctx.strokeStyle = `hsla(280,100%,70%,${sub * 0.6})`;
+      ctx.lineWidth = 1 + Math.random();
+      ctx.stroke();
+    }
+  }
+
+  ctx.restore();
+}
+
+// ─── MODE: WEB ──────────────────────────────────────────────────────────────
+function drawWeb(amp, domFreq, centroid, sampleRate) {
+  const nyq = sampleRate / 2;
+  const bass = bandVals[1], mid = bandVals[3], high = bandVals[5], sub = bandVals[0];
+  const nodes = 24;
+  const R = Math.min(cx, cy) * 0.72;
+  const pts = [];
+
+  for (let i = 0; i < nodes; i++) {
+    const a = (i / nodes) * Math.PI * 2 - Math.PI / 2;
+    const idx = Math.floor((i / nodes) * bufferLen * 0.5);
+    const v = dataArray[idx] / 255;
+    const r = R * (0.4 + v * 0.6);
+    pts.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r, v, a });
+  }
+
+  // Outer polygon
+  ctx.beginPath();
+  pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+  ctx.closePath();
+  ctx.strokeStyle = `hsla(${centroid / nyq * 360},100%,65%,0.6)`;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Cross-connect high energy nodes
+  const thresh = 0.3 + (1 - high) * 0.4;
+  for (let i = 0; i < nodes; i++) {
+    for (let j = i + 2; j < nodes; j++) {
+      const avg = (pts[i].v + pts[j].v) / 2;
+      if (avg < thresh) continue;
+      const hueVal = ((pts[i].a + pts[j].a) / 2 / Math.PI * 180 + centroid / nyq * 180 + time * 20) % 360;
+      ctx.beginPath();
+      ctx.moveTo(pts[i].x, pts[i].y);
+
+      // Bezier control point pulled toward center by bass
+      const mx = (pts[i].x + pts[j].x) / 2;
+      const my = (pts[i].y + pts[j].y) / 2;
+      const pull = bass * 0.5;
+      const cpx = lerp(mx, cx, pull);
+      const cpy = lerp(my, cy, pull);
+
+      ctx.quadraticCurveTo(cpx, cpy, pts[j].x, pts[j].y);
+      ctx.strokeStyle = `hsla(${hueVal},100%,60%,${avg * 0.5})`;
+      ctx.lineWidth = avg * 2;
+      ctx.stroke();
+    }
+  }
+
+  // Node dots
+  pts.forEach(p => {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 2 + p.v * 5, 0, Math.PI * 2);
+    ctx.fillStyle = `hsla(${centroid / nyq * 360 + 180},100%,70%,${p.v})`;
+    ctx.fill();
+  });
+
+  // Center sub pulse
+  ctx.beginPath();
+  ctx.arc(cx, cy, 3 + sub * 50, 0, Math.PI * 2);
+  ctx.strokeStyle = `hsla(280,100%,70%,${sub * 0.8})`;
+  ctx.lineWidth = 1 + sub * 3;
+  ctx.stroke();
+}
+
+// ─── MODE: ORBIT ────────────────────────────────────────────────────────────
+function drawOrbit(amp, domFreq, centroid, sampleRate) {
+  const nyq = sampleRate / 2;
+  const bass = bandVals[1], mid = bandVals[3], sub = bandVals[0], high = bandVals[5];
+
+  ctx.save();
+  ctx.translate(cx, cy);
+
+  const orbs = [
+    { band: 0, color: '#7b2fff', speed: 0.4,  r: 0.15, size: 8  },
+    { band: 1, color: '#ff2d6b', speed: 0.25, r: 0.27, size: 12 },
+    { band: 2, color: '#ff7700', speed: 0.18, r: 0.37, size: 8  },
+    { band: 3, color: '#ffe600', speed: 0.12, r: 0.48, size: 10 },
+    { band: 4, color: '#00ff88', speed: 0.08, r: 0.60, size: 7  },
+    { band: 5, color: '#00ffe7', speed: 0.05, r: 0.72, size: 5  },
+  ];
+
+  const maxR = Math.min(cx, cy) * 0.85;
+
+  // Frequency ring (background waveform)
+  const nPoints = bufferLen / 2;
+  ctx.beginPath();
+  for (let i = 0; i < nPoints; i++) {
+    const a = (i / nPoints) * Math.PI * 2 - Math.PI / 2;
+    const v = dataArray[i] / 255;
+    const r = maxR * 0.78 + v * maxR * 0.2;
+    const x = Math.cos(a) * r, y = Math.sin(a) * r;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.strokeStyle = `hsla(${centroid / nyq * 360},80%,55%,0.2)`;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  orbs.forEach(o => {
+    const energy = bandVals[o.band];
+    const orbitR = maxR * o.r * (1 + energy * 0.3);
+    const angle = time * o.speed * (1 + energy * 2) * Math.PI * 2;
+
+    // Orbit circle
+    ctx.beginPath();
+    ctx.arc(0, 0, orbitR, 0, Math.PI * 2);
+    ctx.strokeStyle = o.color + '18';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Satellite position
+    const sx = Math.cos(angle) * orbitR;
+    const sy = Math.sin(angle) * orbitR;
+    const sr = o.size + energy * 20;
+
+    // Glow
+    const grd = ctx.createRadialGradient(sx, sy, 0, sx, sy, sr * 2.5);
+    grd.addColorStop(0, o.color + 'cc');
+    grd.addColorStop(1, o.color + '00');
+    ctx.beginPath();
+    ctx.arc(sx, sy, sr * 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = grd;
+    ctx.fill();
+
+    // Core dot
+    ctx.beginPath();
+    ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+    ctx.fillStyle = o.color;
+    ctx.fill();
+
+    // Trail
+    const trail = 20;
+    for (let t = 1; t <= trail; t++) {
+      const ta = angle - (t / trail) * 0.8;
+      const tx = Math.cos(ta) * orbitR;
+      const ty = Math.sin(ta) * orbitR;
+      ctx.beginPath();
+      ctx.arc(tx, ty, sr * (1 - t / trail) * 0.7, 0, Math.PI * 2);
+      ctx.fillStyle = o.color + Math.floor((1 - t / trail) * energy * 128).toString(16).padStart(2, '0');
+      ctx.fill();
+    }
+
+    // Connection line to center
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(sx, sy);
+    ctx.strokeStyle = o.color + Math.floor(energy * 60).toString(16).padStart(2, '0');
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+  });
+
+  // Center core
+  const coreR = 6 + sub * 30 + bass * 15;
+  const coreGrd = ctx.createRadialGradient(0, 0, 0, 0, 0, coreR * 2);
+  coreGrd.addColorStop(0, '#fff');
+  coreGrd.addColorStop(0.3, '#00ffe7cc');
+  coreGrd.addColorStop(1, '#00ffe700');
+  ctx.beginPath();
+  ctx.arc(0, 0, coreR * 2, 0, Math.PI * 2);
+  ctx.fillStyle = coreGrd;
+  ctx.fill();
+
+  ctx.restore();
+}
+
+// ─── Utility ───────────────────────────────────────────────────────────────
+function drawPolygon(ctx, x, y, r, n, color, lw) {
+  ctx.beginPath();
+  for (let i = 0; i <= n; i++) {
+    const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+    const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r;
+    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lw;
+  ctx.stroke();
+}
+
+// Initial blank animation before mic starts
+(function idleLoop() {
+  if (analyser) return;
+  requestAnimationFrame(idleLoop);
+  time += 0.005;
+  ctx.fillStyle = 'rgba(3,5,8,0.15)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.save();
+  ctx.translate(cx, cy);
+  const r = Math.min(cx, cy) * 0.3;
+  for (let i = 0; i < 6; i++) {
+    ctx.save();
+    ctx.rotate(time * (i % 2 === 0 ? 1 : -1) * 0.5);
+    drawPolygon(ctx, 0, 0, r * (0.4 + i * 0.12), 6,
+      `hsla(${i * 40 + time * 20},100%,55%,${0.05 + 0.04 * i})`, 1);
+    ctx.restore();
+  }
+  ctx.restore();
+})();
+</script>
+</body>
+</html>
